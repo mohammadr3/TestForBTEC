@@ -1580,8 +1580,6 @@ function renderDashboard() {
     renderSpecAnalysis(results);
 }
 
-let pathChart, specChart, genderChart, genderPathChart;
-
 function renderCharts(results) {
     const academic = results.filter(r => r.test1?.result === 'academic').length;
     const btec = results.filter(r => r.test1?.result === 'btec').length;
