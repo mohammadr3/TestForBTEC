@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>اختبار تحديد المسار - طلاب الصف التاسع | الأردن</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
     <style>
         * { font-family: 'Cairo', sans-serif; }
         
@@ -96,6 +102,26 @@
 
         .btn-secondary:hover {
             background: rgba(255, 255, 255, 0.18);
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            transition: all 0.3s ease;
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            transition: all 0.3s ease;
+        }
+
+        .btn-success:hover {
+            background: linear-gradient(135deg, #059669, #047857);
             transform: translateY(-2px);
         }
 
@@ -197,10 +223,6 @@
             background-clip: text;
         }
 
-        .jordan-flag {
-            background: linear-gradient(180deg, #000 25%, #fff 25%, #fff 50%, #007a3d 50%, #007a3d 75%);
-        }
-
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -211,6 +233,92 @@
             background: rgba(139, 92, 246, 0.4);
             border-radius: 3px;
         }
+
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .data-table th {
+            background: rgba(139, 92, 246, 0.2);
+            padding: 12px 16px;
+            text-align: right;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .data-table tr:hover td {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .modal-overlay {
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(5px);
+        }
+
+        .tab-btn {
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        }
+
+        .tab-btn:not(.active):hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .loading-spinner {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: #a855f7;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.online {
+            background: #10b981;
+        }
+
+        .status-dot.offline {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @media print {
+            body { background: white !important; }
+            .no-print { display: none !important; }
+        }
     </style>
 </head>
 <body class="text-white overflow-x-hidden">
@@ -218,12 +326,35 @@
     <!-- Particles Background -->
     <div id="particles" class="fixed inset-0 pointer-events-none z-0"></div>
 
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 hidden">
+        <div class="text-center">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-white/70">جاري التحميل...</p>
+        </div>
+    </div>
+
     <!-- Main Container -->
     <div class="relative z-10 min-h-screen">
 
         <!-- ==================== LANDING PAGE ==================== -->
         <div id="landing-page" class="min-h-screen flex items-center justify-center p-4">
             <div class="max-w-4xl w-full text-center">
+                <!-- Admin Button & Status -->
+                <div class="fixed top-4 left-4 z-50 no-print flex items-center gap-3">
+                    <div class="flex items-center gap-2 glass px-3 py-2 rounded-lg text-xs">
+                        <div id="connection-status" class="status-dot offline"></div>
+                        <span id="connection-text" class="text-white/50">غير متصل</span>
+                    </div>
+                    <button onclick="showDashboard()" class="glass px-4 py-2 rounded-lg text-sm font-bold hover:bg-white/20 transition-all flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        <span>لوحة التحليل</span>
+                        <span id="results-count-badge" class="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+                    </button>
+                </div>
+
                 <!-- Logo / Icon -->
                 <div class="floating mb-8">
                     <div class="w-28 h-28 mx-auto rounded-3xl glass-strong flex items-center justify-center pulse-glow">
@@ -263,7 +394,7 @@
                         <h3 class="text-xl font-bold mb-2 text-cyan-300">الاختبار الأول</h3>
                         <h4 class="text-lg font-semibold mb-3">تحديد المسار التعليمي</h4>
                         <p class="text-white/50 text-sm leading-relaxed">
-                            هل تناسبك الدراسة الأكاديمية التقليدية أم مسار التعليم المهني والتقني BTEC؟ هذا الاختبار يساعدك تعرف.
+                            هل تناسبك الدراسة الأكاديمية التقليدية أم مسار التعليم المهني والتقني BTEC؟
                         </p>
                         <div class="mt-4 flex items-center gap-2 text-white/40 text-xs">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -282,7 +413,7 @@
                         <h3 class="text-xl font-bold mb-2 text-purple-300">الاختبار الثاني</h3>
                         <h4 class="text-lg font-semibold mb-3">تحديد تخصص BTEC</h4>
                         <p class="text-white/50 text-sm leading-relaxed">
-                            اكتشف أي تخصص من تخصصات BTEC المتوفرة في الأردن هو الأنسب لشخصيتك وميولك واهتماماتك.
+                            اكتشف أي تخصص من تخصصات BTEC المتوفرة في الأردن هو الأنسب لك.
                         </p>
                         <div class="mt-4 flex items-center gap-2 text-white/40 text-xs">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -295,10 +426,18 @@
 
                 <!-- Student Info Form -->
                 <div class="glass rounded-2xl p-8 max-w-lg mx-auto slide-up" style="animation-delay: 0.6s">
-                    <h3 class="text-lg font-bold mb-6 text-center">أدخل اسمك للبدء</h3>
-                    <div class="mb-6">
-                        <input type="text" id="student-name" placeholder="اكتب اسمك هنا..." 
+                    <h3 class="text-lg font-bold mb-6 text-center">أدخل بياناتك للبدء</h3>
+                    <div class="space-y-4 mb-6">
+                        <input type="text" id="student-name" placeholder="اسمك الكامل..." 
                             class="w-full bg-white/10 border border-white/20 rounded-xl px-5 py-4 text-white placeholder-white/30 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all text-center text-lg">
+                        <input type="text" id="student-school" placeholder="اسم مدرستك (اختياري)..." 
+                            class="w-full bg-white/10 border border-white/20 rounded-xl px-5 py-3 text-white placeholder-white/30 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all text-center">
+                        <select id="student-gender" 
+                            class="w-full bg-white/10 border border-white/20 rounded-xl px-5 py-3 text-white focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 transition-all text-center">
+                            <option value="" class="bg-gray-800">اختر الجنس (اختياري)</option>
+                            <option value="male" class="bg-gray-800">ذكر</option>
+                            <option value="female" class="bg-gray-800">أنثى</option>
+                        </select>
                     </div>
                     <button onclick="startTest1()" class="btn-primary w-full py-4 rounded-xl text-lg font-bold">
                         ابدأ الاختبار الأول 🚀
@@ -310,7 +449,6 @@
         <!-- ==================== TEST 1: Academic vs BTEC ==================== -->
         <div id="test1-page" class="min-h-screen p-4 py-8 hidden">
             <div class="max-w-3xl mx-auto">
-                <!-- Header -->
                 <div class="glass rounded-2xl p-6 mb-6">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-3">
@@ -329,22 +467,16 @@
                             <span class="text-white/30 text-lg"> / 15</span>
                         </div>
                     </div>
-                    <!-- Progress Bar -->
                     <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                         <div id="test1-progress" class="progress-bar-fill h-full rounded-full" style="width: 6.67%"></div>
                     </div>
                 </div>
 
-                <!-- Question -->
                 <div id="test1-question-container" class="fade-in">
                     <div class="glass-strong rounded-2xl p-8 mb-6">
                         <p id="test1-question" class="text-xl md:text-2xl font-bold leading-relaxed text-center"></p>
                     </div>
-
-                    <!-- Options -->
                     <div id="test1-options" class="space-y-4 mb-8"></div>
-
-                    <!-- Navigation -->
                     <div class="flex gap-4">
                         <button id="test1-next-btn" onclick="nextQuestion1()" disabled 
                             class="btn-primary flex-1 py-4 rounded-xl text-lg font-bold disabled:opacity-30">
@@ -362,16 +494,13 @@
         <!-- ==================== TEST 1 RESULT ==================== -->
         <div id="test1-result" class="min-h-screen flex items-center justify-center p-4 hidden">
             <div class="max-w-2xl w-full">
-                <div id="test1-result-content" class="result-card glass-strong rounded-3xl p-8 md:p-12 text-center">
-                    <!-- Filled dynamically -->
-                </div>
+                <div id="test1-result-content" class="result-card glass-strong rounded-3xl p-8 md:p-12 text-center"></div>
             </div>
         </div>
 
         <!-- ==================== TEST 2: BTEC Specialization ==================== -->
         <div id="test2-page" class="min-h-screen p-4 py-8 hidden">
             <div class="max-w-3xl mx-auto">
-                <!-- Header -->
                 <div class="glass rounded-2xl p-6 mb-6">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-3">
@@ -395,14 +524,11 @@
                     </div>
                 </div>
 
-                <!-- Question -->
                 <div id="test2-question-container" class="fade-in">
                     <div class="glass-strong rounded-2xl p-8 mb-6">
                         <p id="test2-question" class="text-xl md:text-2xl font-bold leading-relaxed text-center"></p>
                     </div>
-
                     <div id="test2-options" class="space-y-4 mb-8"></div>
-
                     <div class="flex gap-4">
                         <button id="test2-next-btn" onclick="nextQuestion2()" disabled 
                             class="btn-primary flex-1 py-4 rounded-xl text-lg font-bold disabled:opacity-30">
@@ -420,25 +546,264 @@
         <!-- ==================== TEST 2 RESULT ==================== -->
         <div id="test2-result" class="min-h-screen p-4 py-8 hidden">
             <div class="max-w-4xl mx-auto">
-                <div id="test2-result-content">
-                    <!-- Filled dynamically -->
+                <div id="test2-result-content"></div>
+            </div>
+        </div>
+
+        <!-- ==================== DASHBOARD ==================== -->
+        <div id="dashboard-page" class="min-h-screen p-4 py-8 hidden">
+            <div class="max-w-7xl mx-auto">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                    <div>
+                        <h1 class="text-3xl font-black gradient-text">لوحة تحليل النتائج</h1>
+                        <p class="text-white/50">إحصائيات وتحليلات شاملة لجميع نتائج الطلاب</p>
+                    </div>
+                    <div class="flex gap-3 flex-wrap">
+                        <button onclick="refreshData()" class="btn-secondary px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            تحديث
+                        </button>
+                        <button onclick="exportData()" class="btn-success px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            تصدير Excel
+                        </button>
+                        <button onclick="confirmClearData()" class="btn-danger px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            مسح الكل
+                        </button>
+                        <button onclick="showPage('landing-page')" class="btn-secondary px-4 py-2 rounded-lg font-bold">
+                            ← رجوع
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div class="stat-card glass-strong rounded-2xl p-6 text-center">
+                        <div class="text-4xl font-black gradient-text mb-2" id="stat-total">0</div>
+                        <div class="text-white/50 text-sm">إجمالي الطلاب</div>
+                    </div>
+                    <div class="stat-card glass-strong rounded-2xl p-6 text-center">
+                        <div class="text-4xl font-black text-cyan-400 mb-2" id="stat-academic">0</div>
+                        <div class="text-white/50 text-sm">مسار أكاديمي</div>
+                    </div>
+                    <div class="stat-card glass-strong rounded-2xl p-6 text-center">
+                        <div class="text-4xl font-black text-purple-400 mb-2" id="stat-btec">0</div>
+                        <div class="text-white/50 text-sm">مسار BTEC</div>
+                    </div>
+                    <div class="stat-card glass-strong rounded-2xl p-6 text-center">
+                        <div class="text-4xl font-black text-amber-400 mb-2" id="stat-mixed">0</div>
+                        <div class="text-white/50 text-sm">متوازن</div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="grid md:grid-cols-2 gap-6 mb-8">
+                    <div class="glass-strong rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4">توزيع المسارات التعليمية</h3>
+                        <div class="h-64">
+                            <canvas id="pathChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-strong rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4">أكثر التخصصات اختياراً</h3>
+                        <div class="h-64">
+                            <canvas id="specChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gender Distribution -->
+                <div class="grid md:grid-cols-3 gap-6 mb-8">
+                    <div class="glass-strong rounded-2xl p-6">
+                        <h3 class="text-lg font-bold mb-4">توزيع الجنس</h3>
+                        <div class="h-48">
+                            <canvas id="genderChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-strong rounded-2xl p-6 md:col-span-2">
+                        <h3 class="text-lg font-bold mb-4">المسار حسب الجنس</h3>
+                        <div class="h-48">
+                            <canvas id="genderPathChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs & Table -->
+                <div class="glass-strong rounded-2xl overflow-hidden">
+                    <div class="flex border-b border-white/10">
+                        <button onclick="switchTab('all')" class="tab-btn active flex-1 py-4 font-bold" id="tab-all">
+                            جميع النتائج
+                        </button>
+                        <button onclick="switchTab('academic')" class="tab-btn flex-1 py-4 font-bold" id="tab-academic">
+                            المسار الأكاديمي
+                        </button>
+                        <button onclick="switchTab('btec')" class="tab-btn flex-1 py-4 font-bold" id="tab-btec">
+                            مسار BTEC
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="data-table" id="results-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>الاسم</th>
+                                    <th>المدرسة</th>
+                                    <th>الجنس</th>
+                                    <th>المسار</th>
+                                    <th>النسبة</th>
+                                    <th>تخصص BTEC</th>
+                                    <th>التاريخ</th>
+                                    <th>إجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="empty-state" class="p-12 text-center hidden">
+                        <div class="text-6xl mb-4">📊</div>
+                        <h3 class="text-xl font-bold mb-2">لا توجد نتائج بعد</h3>
+                        <p class="text-white/50">ستظهر هنا نتائج الطلاب بعد إكمالهم للاختبارات</p>
+                    </div>
+                </div>
+
+                <!-- Specialization Analysis -->
+                <div class="glass-strong rounded-2xl p-6 mt-8">
+                    <h3 class="text-xl font-bold mb-6">تحليل تفصيلي للتخصصات</h3>
+                    <div id="spec-analysis" class="grid md:grid-cols-2 lg:grid-cols-5 gap-4"></div>
                 </div>
             </div>
         </div>
 
     </div>
 
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="modal-overlay absolute inset-0" onclick="closeModal()"></div>
+        <div class="glass-strong rounded-2xl p-8 max-w-md w-full relative z-10 text-center">
+            <div class="text-5xl mb-4">⚠️</div>
+            <h3 class="text-xl font-bold mb-2">تأكيد حذف البيانات</h3>
+            <p class="text-white/60 mb-6">هل أنت متأكد من حذف جميع النتائج؟ لا يمكن التراجع عن هذا الإجراء.</p>
+            <div class="flex gap-4">
+                <button onclick="clearAllData()" class="btn-danger flex-1 py-3 rounded-xl font-bold">
+                    نعم، احذف الكل
+                </button>
+                <button onclick="closeModal()" class="btn-secondary flex-1 py-3 rounded-xl font-bold">
+                    إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Details Modal -->
+    <div id="details-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="modal-overlay absolute inset-0" onclick="closeDetailsModal()"></div>
+        <div class="glass-strong rounded-2xl p-8 max-w-2xl w-full relative z-10 max-h-[90vh] overflow-y-auto">
+            <button onclick="closeDetailsModal()" class="absolute top-4 left-4 text-white/50 hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+            <div id="details-content"></div>
+        </div>
+    </div>
+
 <script>
+// =====================================================
+// ⚠️ إعدادات Firebase - يجب تعديلها ⚠️
+// =====================================================
+// اتبع الخطوات في الأسفل لإنشاء مشروع Firebase مجاني
+// ثم انسخ بيانات الاتصال هنا
+
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
+
+// =====================================================
+
+// Initialize Firebase
+let db = null;
+let isFirebaseConnected = false;
+let allResults = [];
+
+function initFirebase() {
+    try {
+        if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+            console.warn("⚠️ Firebase غير مُعد. يرجى إضافة بيانات Firebase الخاصة بك.");
+            updateConnectionStatus(false);
+            return;
+        }
+        
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+        
+        // Listen for connection state
+        db.ref('.info/connected').on('value', (snap) => {
+            isFirebaseConnected = snap.val() === true;
+            updateConnectionStatus(isFirebaseConnected);
+        });
+        
+        // Listen for results changes
+        db.ref('results').on('value', (snapshot) => {
+            allResults = [];
+            snapshot.forEach((child) => {
+                allResults.push({ id: child.key, ...child.val() });
+            });
+            allResults.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            updateBadge();
+            if (document.getElementById('dashboard-page').classList.contains('hidden') === false) {
+                renderDashboard();
+            }
+        });
+        
+    } catch (error) {
+        console.error("Firebase Error:", error);
+        updateConnectionStatus(false);
+    }
+}
+
+function updateConnectionStatus(connected) {
+    const statusDot = document.getElementById('connection-status');
+    const statusText = document.getElementById('connection-text');
+    
+    if (connected) {
+        statusDot.classList.remove('offline');
+        statusDot.classList.add('online');
+        statusText.textContent = 'متصل';
+    } else {
+        statusDot.classList.remove('online');
+        statusDot.classList.add('offline');
+        statusText.textContent = 'غير متصل';
+    }
+}
+
 // ======================== DATA ========================
 
 let studentName = '';
+let studentSchool = '';
+let studentGender = '';
 let test1CurrentQ = 0;
 let test1Answers = {};
 let test2CurrentQ = 0;
 let test2Answers = {};
+let currentTab = 'all';
+let pathChart, specChart, genderChart, genderPathChart;
 
-// Test 1: Academic vs BTEC
-// Each answer has: academic score and btec score
+// Test 1 Questions
 const test1Questions = [
     {
         q: "لما المعلم يشرح درس جديد، شو الطريقة اللي بتفهم فيها أكثر؟",
@@ -531,7 +896,7 @@ const test1Questions = [
         ]
     },
     {
-        q: "كيف بتوصف علاقتك مع الدراسة النظرية (الكتب والمحاضرات)؟",
+        q: "كيف بتوصف علاقتك مع الدراسة النظرية؟",
         options: [
             { text: "بحبها وبستمتع فيها ❤️", academic: 3, btec: 0 },
             { text: "مملة بس ضرورية 😐", academic: 2, btec: 1 },
@@ -577,8 +942,7 @@ const test1Questions = [
     }
 ];
 
-// Test 2: BTEC Specialization
-// Specializations: engineering, it, business, hospitality, beauty, agriculture, art, media, construction, tourism
+// Test 2 Questions
 const test2Questions = [
     {
         q: "لو عندك مشروع مدرسي حر، شو بتختار تعمل؟",
@@ -601,10 +965,10 @@ const test2Questions = [
     {
         q: "لو سافرت على البتراء أو جرش، شو أكثر شي بيلفت انتباهك؟",
         options: [
-            { text: "كيف بنوا هالمباني العظيمة بدون تكنولوجيا 🏛️", scores: { engineering: 3, construction: 2 } },
+            { text: "كيف بنوا هالمباني العظيمة 🏛️", scores: { engineering: 3, construction: 2 } },
             { text: "جمال المنحوتات والنقوش الفنية 🎭", scores: { art: 3 } },
-            { text: "تاريخ المكان وقصته وكيف ممكن نسوقله 📸", scores: { tourism: 3, media: 1 } },
-            { text: "المطاعم والأكلات المحلية اللي حوالين المكان 🥘", scores: { hospitality: 3 } }
+            { text: "تاريخ المكان وكيف ممكن نسوقله 📸", scores: { tourism: 3, media: 1 } },
+            { text: "المطاعم والأكلات المحلية 🥘", scores: { hospitality: 3 } }
         ]
     },
     {
@@ -621,7 +985,7 @@ const test2Questions = [
         options: [
             { text: "شركة برمجة وتطوير تطبيقات 💻", scores: { it: 3, business: 1 } },
             { text: "مطعم أو كافيه 🍽️", scores: { hospitality: 3, business: 1 } },
-            { text: "صالون حلاقة وتجميل حديث ✂️", scores: { beauty: 3, business: 1 } },
+            { text: "صالون حلاقة وتجميل ✂️", scores: { beauty: 3, business: 1 } },
             { text: "مكتب هندسي أو شركة مقاولات 📐", scores: { engineering: 2, construction: 2, business: 1 } }
         ]
     },
@@ -653,16 +1017,16 @@ const test2Questions = [
         ]
     },
     {
-        q: "لما تكون بالطبيعة (وادي رم، عجلون، البحر الميت)، شو بتحس؟",
+        q: "لما تكون بالطبيعة، شو بتحس؟",
         options: [
             { text: "بحب أزرع وأعتني بالنباتات 🌺", scores: { agriculture: 3 } },
             { text: "بحب أصور المناظر وأعدلها 📸", scores: { media: 3, art: 1 } },
-            { text: "بفكر كيف ممكن نعمل مشاريع سياحية هون 🗺️", scores: { tourism: 3, business: 1 } },
-            { text: "بحب أستكشف وأمشي وأتعرف على الأماكن 🥾", scores: { tourism: 2, agriculture: 1 } }
+            { text: "بفكر كيف ممكن نعمل مشاريع سياحية 🗺️", scores: { tourism: 3, business: 1 } },
+            { text: "بحب أستكشف وأتعرف على الأماكن 🥾", scores: { tourism: 2, agriculture: 1 } }
         ]
     },
     {
-        q: "شو أكثر شي بيعجبك لما تتفرج على برنامج تلفزيوني؟",
+        q: "شو أكثر شي بيعجبك بالتلفزيون؟",
         options: [
             { text: "برامج الطبخ ومسابقات الطهاة 👨‍🍳", scores: { hospitality: 3 } },
             { text: "برامج التصميم والديكور 🏠", scores: { art: 2, construction: 2 } },
@@ -689,7 +1053,7 @@ const test2Questions = [
         ]
     },
     {
-        q: "لو انت بمول (مجمع تجاري)، شو أول محل بتدخله؟",
+        q: "لو انت بمول، شو أول محل بتدخله؟",
         options: [
             { text: "محل إلكترونيات 📱", scores: { it: 3, engineering: 1 } },
             { text: "محل ملابس وأزياء 👗", scores: { beauty: 2, art: 1 } },
@@ -739,15 +1103,15 @@ const test2Questions = [
             { text: "لما أنجز شي بإيدي وأشوف النتيجة 🏆", scores: { engineering: 2, construction: 2 } },
             { text: "لما أساعد حدا يطلع بأحلى شكل 💫", scores: { beauty: 3 } },
             { text: "لما أبيع شي أو أنجح بمشروع تجاري 💵", scores: { business: 3 } },
-            { text: "لما أطلع على مكان جديد وأتعرف على ثقافات 🌎", scores: { tourism: 3 } }
+            { text: "لما أطلع على مكان جديد 🌎", scores: { tourism: 3 } }
         ]
     },
     {
-        q: "لو عندك قطعة أرض فاضية في إربد أو الكرك، شو بتعمل فيها؟",
+        q: "لو عندك قطعة أرض فاضية، شو بتعمل فيها؟",
         options: [
             { text: "أبني عليها بيت أو مبنى 🏗️", scores: { construction: 3, engineering: 1 } },
             { text: "أزرعها وأعمل بستان 🌳", scores: { agriculture: 3 } },
-            { text: "أعمل عليها مشروع تجاري (محل أو مطعم) 🏪", scores: { business: 2, hospitality: 2 } },
+            { text: "أعمل عليها مشروع تجاري 🏪", scores: { business: 2, hospitality: 2 } },
             { text: "أعملها مكان سياحي أو استراحة 🏕️", scores: { tourism: 3 } }
         ]
     },
@@ -757,131 +1121,108 @@ const test2Questions = [
             { text: "أشتغل بمجال التكنولوجيا والتطور 🚀", scores: { it: 3, engineering: 1 } },
             { text: "أشتغل بمجال فيه إبداع وفن 🎨", scores: { art: 2, media: 2, beauty: 1 } },
             { text: "أشتغل مع ناس وأقدم خدمات مميزة 🤝", scores: { hospitality: 2, tourism: 2, beauty: 1 } },
-            { text: "أشتغل بمشروعي الخاص وأكون مديرحالي 👑", scores: { business: 3 } }
+            { text: "أشتغل بمشروعي الخاص 👑", scores: { business: 3 } }
         ]
     }
 ];
 
 // Specialization details
 const specDetails = {
-    engineering: {
-        name: "الهندسة",
-        icon: "⚙️",
-        color: "from-blue-500 to-cyan-500",
-        colorLight: "bg-blue-500/20",
-        textColor: "text-blue-400",
-        desc: "تعلّم أسس الهندسة الميكانيكية والكهربائية والإلكترونية. بتتعلم تصمم وتبني وتحل مشاكل هندسية حقيقية.",
-        skills: ["التصميم الهندسي CAD", "الدوائر الكهربائية", "الميكانيكا", "حل المشكلات الهندسية"],
-        careers: ["فني هندسة ميكانيكية", "فني كهرباء", "مساعد مهندس", "فني صيانة"],
-        note: "مناسب للي بحب الرياضيات والفيزياء وبحب يعرف كيف الأشياء بتشتغل"
-    },
-    it: {
-        name: "تكنولوجيا المعلومات",
-        icon: "💻",
-        color: "from-purple-500 to-indigo-500",
-        colorLight: "bg-purple-500/20",
-        textColor: "text-purple-400",
-        desc: "ادخل عالم البرمجة والشبكات وقواعد البيانات. تخصص المستقبل اللي بفتحلك أبواب كثيرة بسوق العمل.",
-        skills: ["البرمجة", "تطوير المواقع", "الشبكات", "أمن المعلومات"],
-        careers: ["مطور ويب", "فني شبكات", "مبرمج", "فني دعم تقني"],
-        note: "مناسب للي بحب الكمبيوتر والتكنولوجيا وبحب يحل مشاكل رقمية"
-    },
-    business: {
-        name: "إدارة الأعمال",
-        icon: "💼",
-        color: "from-emerald-500 to-teal-500",
-        colorLight: "bg-emerald-500/20",
-        textColor: "text-emerald-400",
-        desc: "تعلّم كيف تدير مشروع، تسوّق منتجات، وتفهم عالم المال والأعمال. أساس ريادة الأعمال.",
-        skills: ["التسويق", "المحاسبة", "إدارة المشاريع", "التخطيط المالي"],
-        careers: ["رائد أعمال", "محاسب", "مدير تسويق", "مسؤول مبيعات"],
-        note: "مناسب للي عنده شخصية قيادية وبحب التجارة والبيع والشراء"
-    },
-    hospitality: {
-        name: "الفندقة والضيافة",
-        icon: "🏨",
-        color: "from-amber-500 to-orange-500",
-        colorLight: "bg-amber-500/20",
-        textColor: "text-amber-400",
-        desc: "تعلّم فنون الطبخ وإدارة الفنادق والمطاعم. الأردن فيه قطاع سياحي قوي ومحتاج كفاءات.",
-        skills: ["فنون الطبخ", "إدارة المطاعم", "خدمة العملاء", "سلامة الغذاء"],
-        careers: ["شيف / طاهي", "مدير مطعم", "مسؤول ضيافة", "مدير فندق"],
-        note: "مناسب للي بحب الطبخ والضيافة وخدمة الناس"
-    },
-    beauty: {
-        name: "الشعر والتجميل",
-        icon: "✂️",
-        color: "from-pink-500 to-rose-500",
-        colorLight: "bg-pink-500/20",
-        textColor: "text-pink-400",
-        desc: "تعلّم فنون التجميل والعناية بالشعر والبشرة. مجال مطلوب ودائماً في تطور.",
-        skills: ["قص وتصفيف الشعر", "العناية بالبشرة", "المكياج الاحترافي", "العناية بالأظافر"],
-        careers: ["مصفف شعر", "خبير تجميل", "مالك صالون", "فنان مكياج"],
-        note: "مناسب للي عنده ذوق فني وبحب يهتم بمظهر الناس ويسعدهم"
-    },
-    agriculture: {
-        name: "الزراعة",
-        icon: "🌾",
-        color: "from-green-500 to-lime-500",
-        colorLight: "bg-green-500/20",
-        textColor: "text-green-400",
-        desc: "تعلّم أسس الزراعة الحديثة وتربية الحيوان والأمن الغذائي. الأردن محتاج خبراء زراعيين.",
-        skills: ["الزراعة المائية", "تربية الحيوان", "إدارة المزارع", "الزراعة العضوية"],
-        careers: ["فني زراعي", "مدير مزرعة", "خبير تغذية حيوانية", "مهندس زراعي"],
-        note: "مناسب للي بحب الطبيعة والنباتات والحيوانات"
-    },
-    art: {
-        name: "الفن والتصميم",
-        icon: "🎨",
-        color: "from-violet-500 to-fuchsia-500",
-        colorLight: "bg-violet-500/20",
-        textColor: "text-violet-400",
-        desc: "أطلق إبداعك بتعلم التصميم الجرافيكي والرسم والتصوير والحرف الفنية.",
-        skills: ["التصميم الجرافيكي", "الرسم والتلوين", "التصوير الفوتوغرافي", "تصميم المنتجات"],
-        careers: ["مصمم جرافيك", "فنان تشكيلي", "مصور محترف", "مصمم داخلي"],
-        note: "مناسب للي عنده موهبة فنية وبحب يبدع بالألوان والأشكال"
-    },
-    media: {
-        name: "الوسائط الإبداعية",
-        icon: "🎬",
-        color: "from-red-500 to-pink-500",
-        colorLight: "bg-red-500/20",
-        textColor: "text-red-400",
-        desc: "تعلّم صناعة المحتوى الرقمي والتصوير والمونتاج والتصميم الإعلامي. عالم السوشال ميديا بيستناك.",
-        skills: ["تصوير الفيديو", "المونتاج", "صناعة المحتوى", "الموشن جرافيك"],
-        careers: ["صانع محتوى", "مصور فيديو", "مصمم موشن جرافيك", "مدير سوشال ميديا"],
-        note: "مناسب للي بحب التصوير والتعديل وصناعة فيديوهات"
-    },
-    construction: {
-        name: "البناء والإنشاءات",
-        icon: "🏗️",
-        color: "from-yellow-600 to-amber-600",
-        colorLight: "bg-yellow-600/20",
-        textColor: "text-yellow-400",
-        desc: "تعلّم أسس البناء والإنشاءات وقراءة المخططات. قطاع البناء من أهم القطاعات بالأردن.",
-        skills: ["قراءة المخططات", "مواد البناء", "السلامة المهنية", "إدارة المشاريع الإنشائية"],
-        careers: ["فني بناء", "مراقب إنشاءات", "مقاول", "فني تشطيبات"],
-        note: "مناسب للي بحب البناء والتعمير وشغل الأيدي"
-    },
-    tourism: {
-        name: "السياحة والسفر",
-        icon: "✈️",
-        color: "from-sky-500 to-blue-500",
-        colorLight: "bg-sky-500/20",
-        textColor: "text-sky-400",
-        desc: "الأردن فيه كنوز سياحية مثل البتراء ووادي رم. تعلّم كيف تشتغل بقطاع السياحة والسفر.",
-        skills: ["الإرشاد السياحي", "حجز الطيران والفنادق", "التسويق السياحي", "خدمة العملاء"],
-        careers: ["مرشد سياحي", "وكيل سفر", "مسؤول حجوزات", "مدير سياحة"],
-        note: "مناسب للي بحب السفر والتعرف على ثقافات وأماكن جديدة"
-    }
+    engineering: { name: "الهندسة", icon: "⚙️", color: "from-blue-500 to-cyan-500", textColor: "text-blue-400", desc: "تعلّم أسس الهندسة الميكانيكية والكهربائية.", skills: ["التصميم الهندسي", "الدوائر الكهربائية", "الميكانيكا"], careers: ["فني هندسة", "فني كهرباء", "مساعد مهندس"], note: "مناسب للي بحب الرياضيات والفيزياء" },
+    it: { name: "تكنولوجيا المعلومات", icon: "💻", color: "from-purple-500 to-indigo-500", textColor: "text-purple-400", desc: "ادخل عالم البرمجة والشبكات.", skills: ["البرمجة", "تطوير المواقع", "الشبكات"], careers: ["مطور ويب", "فني شبكات", "مبرمج"], note: "مناسب للي بحب الكمبيوتر والتكنولوجيا" },
+    business: { name: "إدارة الأعمال", icon: "💼", color: "from-emerald-500 to-teal-500", textColor: "text-emerald-400", desc: "تعلّم كيف تدير مشروع وتسوّق منتجات.", skills: ["التسويق", "المحاسبة", "إدارة المشاريع"], careers: ["رائد أعمال", "محاسب", "مدير تسويق"], note: "مناسب للي عنده شخصية قيادية" },
+    hospitality: { name: "الفندقة والضيافة", icon: "🏨", color: "from-amber-500 to-orange-500", textColor: "text-amber-400", desc: "تعلّم فنون الطبخ وإدارة الفنادق.", skills: ["فنون الطبخ", "إدارة المطاعم", "خدمة العملاء"], careers: ["شيف", "مدير مطعم", "مدير فندق"], note: "مناسب للي بحب الطبخ والضيافة" },
+    beauty: { name: "الشعر والتجميل", icon: "✂️", color: "from-pink-500 to-rose-500", textColor: "text-pink-400", desc: "تعلّم فنون التجميل والعناية بالشعر.", skills: ["قص الشعر", "العناية بالبشرة", "المكياج"], careers: ["مصفف شعر", "خبير تجميل", "مالك صالون"], note: "مناسب للي عنده ذوق فني" },
+    agriculture: { name: "الزراعة", icon: "🌾", color: "from-green-500 to-lime-500", textColor: "text-green-400", desc: "تعلّم أسس الزراعة الحديثة.", skills: ["الزراعة المائية", "تربية الحيوان", "إدارة المزارع"], careers: ["فني زراعي", "مدير مزرعة", "مهندس زراعي"], note: "مناسب للي بحب الطبيعة" },
+    art: { name: "الفن والتصميم", icon: "🎨", color: "from-violet-500 to-fuchsia-500", textColor: "text-violet-400", desc: "أطلق إبداعك بتعلم التصميم.", skills: ["التصميم الجرافيكي", "الرسم", "التصوير"], careers: ["مصمم جرافيك", "فنان", "مصور"], note: "مناسب للي عنده موهبة فنية" },
+    media: { name: "الوسائط الإبداعية", icon: "🎬", color: "from-red-500 to-pink-500", textColor: "text-red-400", desc: "تعلّم صناعة المحتوى الرقمي.", skills: ["تصوير الفيديو", "المونتاج", "صناعة المحتوى"], careers: ["صانع محتوى", "مصور فيديو", "مدير سوشال ميديا"], note: "مناسب للي بحب التصوير" },
+    construction: { name: "البناء والإنشاءات", icon: "🏗️", color: "from-yellow-600 to-amber-600", textColor: "text-yellow-400", desc: "تعلّم أسس البناء والإنشاءات.", skills: ["قراءة المخططات", "مواد البناء", "السلامة المهنية"], careers: ["فني بناء", "مراقب إنشاءات", "مقاول"], note: "مناسب للي بحب البناء" },
+    tourism: { name: "السياحة والسفر", icon: "✈️", color: "from-sky-500 to-blue-500", textColor: "text-sky-400", desc: "تعلّم كيف تشتغل بقطاع السياحة.", skills: ["الإرشاد السياحي", "حجز الطيران", "التسويق السياحي"], careers: ["مرشد سياحي", "وكيل سفر", "مدير سياحة"], note: "مناسب للي بحب السفر" }
 };
+
+
+// ======================== DATABASE FUNCTIONS ========================
+
+async function saveResultToFirebase(result) {
+    if (!db) {
+        console.warn("Firebase not connected");
+        return null;
+    }
+    
+    try {
+        showLoading();
+        const newRef = db.ref('results').push();
+        await newRef.set({
+            ...result,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+        hideLoading();
+        return newRef.key;
+    } catch (error) {
+        console.error("Error saving:", error);
+        hideLoading();
+        return null;
+    }
+}
+
+async function deleteResultFromFirebase(id) {
+    if (!db) return;
+    try {
+        showLoading();
+        await db.ref('results/' + id).remove();
+        hideLoading();
+    } catch (error) {
+        console.error("Error deleting:", error);
+        hideLoading();
+    }
+}
+
+async function clearAllFromFirebase() {
+    if (!db) return;
+    try {
+        showLoading();
+        await db.ref('results').remove();
+        hideLoading();
+    } catch (error) {
+        console.error("Error clearing:", error);
+        hideLoading();
+    }
+}
+
+function refreshData() {
+    if (db) {
+        showLoading();
+        db.ref('results').once('value').then(() => {
+            hideLoading();
+            renderDashboard();
+        });
+    }
+}
+
+function showLoading() {
+    document.getElementById('loading-overlay').classList.remove('hidden');
+}
+
+function hideLoading() {
+    document.getElementById('loading-overlay').classList.add('hidden');
+}
+
+function updateBadge() {
+    const badge = document.getElementById('results-count-badge');
+    if (allResults.length > 0) {
+        badge.textContent = allResults.length;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
 
 
 // ======================== FUNCTIONS ========================
 
 function createParticles() {
     const container = document.getElementById('particles');
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 15; i++) {
         const particle = document.createElement('div');
         particle.className = 'particle';
         particle.style.left = Math.random() * 100 + '%';
@@ -894,10 +1235,8 @@ function createParticles() {
 }
 
 function showPage(pageId) {
-    const pages = ['landing-page', 'test1-page', 'test1-result', 'test2-page', 'test2-result'];
-    pages.forEach(p => {
-        document.getElementById(p).classList.add('hidden');
-    });
+    const pages = ['landing-page', 'test1-page', 'test1-result', 'test2-page', 'test2-result', 'dashboard-page'];
+    pages.forEach(p => document.getElementById(p).classList.add('hidden'));
     document.getElementById(pageId).classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -906,13 +1245,13 @@ function showPage(pageId) {
 
 function startTest1() {
     studentName = document.getElementById('student-name').value.trim();
+    studentSchool = document.getElementById('student-school').value.trim();
+    studentGender = document.getElementById('student-gender').value;
+    
     if (!studentName) {
         document.getElementById('student-name').style.borderColor = '#ef4444';
-        document.getElementById('student-name').placeholder = 'من فضلك اكتب اسمك أولاً...';
         document.getElementById('student-name').focus();
-        setTimeout(() => {
-            document.getElementById('student-name').style.borderColor = '';
-        }, 2000);
+        setTimeout(() => document.getElementById('student-name').style.borderColor = '', 2000);
         return;
     }
     test1CurrentQ = 0;
@@ -936,7 +1275,7 @@ function renderQuestion1() {
         div.className = `option-card glass rounded-xl p-5 ${isSelected ? 'selected' : ''}`;
         div.innerHTML = `
             <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded-full ${isSelected ? 'bg-purple-500' : 'bg-white/10'} flex items-center justify-center flex-shrink-0 transition-all">
+                <div class="w-10 h-10 rounded-full ${isSelected ? 'bg-purple-500' : 'bg-white/10'} flex items-center justify-center flex-shrink-0">
                     <span class="text-sm font-bold">${isSelected ? '✓' : String.fromCharCode(1571 + i)}</span>
                 </div>
                 <p class="text-lg leading-relaxed">${opt.text}</p>
@@ -946,22 +1285,10 @@ function renderQuestion1() {
         optionsContainer.appendChild(div);
     });
 
-    // Show/hide prev button
     document.getElementById('test1-prev-btn').classList.toggle('hidden', test1CurrentQ === 0);
-
-    // Update next button
     const nextBtn = document.getElementById('test1-next-btn');
     nextBtn.disabled = test1Answers[test1CurrentQ] === undefined;
-    if (test1CurrentQ === test1Questions.length - 1) {
-        nextBtn.textContent = 'عرض النتيجة 🎯';
-    } else {
-        nextBtn.textContent = 'السؤال التالي ←';
-    }
-
-    // Animation
-    document.getElementById('test1-question-container').classList.remove('fade-in');
-    void document.getElementById('test1-question-container').offsetWidth;
-    document.getElementById('test1-question-container').classList.add('fade-in');
+    nextBtn.textContent = test1CurrentQ === test1Questions.length - 1 ? 'عرض النتيجة 🎯' : 'السؤال التالي ←';
 }
 
 function selectAnswer1(index) {
@@ -987,240 +1314,101 @@ function prevQuestion1() {
     }
 }
 
-function showTest1Result() {
-    let academicScore = 0;
-    let btecScore = 0;
-
+function calculateTest1Scores() {
+    let academicScore = 0, btecScore = 0;
     for (let i = 0; i < test1Questions.length; i++) {
-        const answerIndex = test1Answers[i];
-        if (answerIndex !== undefined) {
-            academicScore += test1Questions[i].options[answerIndex].academic;
-            btecScore += test1Questions[i].options[answerIndex].btec;
+        const idx = test1Answers[i];
+        if (idx !== undefined) {
+            academicScore += test1Questions[i].options[idx].academic;
+            btecScore += test1Questions[i].options[idx].btec;
         }
     }
-
     const total = academicScore + btecScore;
-    const academicPercent = Math.round((academicScore / total) * 100);
-    const btecPercent = Math.round((btecScore / total) * 100);
+    return {
+        academicScore, btecScore,
+        academicPercent: Math.round((academicScore / total) * 100),
+        btecPercent: Math.round((btecScore / total) * 100)
+    };
+}
 
+function showTest1Result() {
+    const { academicScore, btecScore, academicPercent, btecPercent } = calculateTest1Scores();
     const isAcademic = academicScore > btecScore;
     const isMixed = Math.abs(academicScore - btecScore) <= 5;
+    const pathResult = isMixed ? 'mixed' : (isAcademic ? 'academic' : 'btec');
+
+    window.currentResult = {
+        name: studentName,
+        school: studentSchool,
+        gender: studentGender,
+        test1: { academicScore, btecScore, academicPercent, btecPercent, result: pathResult },
+        test2: null
+    };
+
+    const circleHTML = `
+        <div class="grid grid-cols-2 gap-6 mb-8">
+            <div class="glass rounded-xl p-6">
+                <div class="score-circle w-24 h-24 mx-auto mb-3">
+                    <svg width="96" height="96" viewBox="0 0 96 96">
+                        <circle class="circle-bg" cx="48" cy="48" r="40"/>
+                        <circle class="circle-fill" cx="48" cy="48" r="40" stroke="url(#grad1)" 
+                            stroke-dasharray="${2 * Math.PI * 40}" stroke-dashoffset="${2 * Math.PI * 40 * (1 - academicPercent/100)}"/>
+                        <defs><linearGradient id="grad1"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient></defs>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center"><span class="text-xl font-black">${academicPercent}%</span></div>
+                </div>
+                <p class="font-bold text-cyan-400">أكاديمي</p>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <div class="score-circle w-24 h-24 mx-auto mb-3">
+                    <svg width="96" height="96" viewBox="0 0 96 96">
+                        <circle class="circle-bg" cx="48" cy="48" r="40"/>
+                        <circle class="circle-fill" cx="48" cy="48" r="40" stroke="url(#grad2)" 
+                            stroke-dasharray="${2 * Math.PI * 40}" stroke-dashoffset="${2 * Math.PI * 40 * (1 - btecPercent/100)}"/>
+                        <defs><linearGradient id="grad2"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center"><span class="text-xl font-black">${btecPercent}%</span></div>
+                </div>
+                <p class="font-bold text-purple-400">مهني BTEC</p>
+            </div>
+        </div>
+    `;
 
     let resultHTML = '';
-
     if (isMixed) {
         resultHTML = `
-            <div class="floating mb-6">
-                <div class="text-7xl">⚖️</div>
-            </div>
+            <div class="floating mb-6"><div class="text-7xl">⚖️</div></div>
             <h2 class="text-3xl font-black mb-2">${studentName}</h2>
             <h3 class="text-2xl font-bold gradient-text mb-6">نتيجتك متوازنة!</h3>
-            <p class="text-white/70 text-lg mb-8 leading-relaxed">
-                عندك ميول ومهارات متوازنة بين المسار الأكاديمي والمسار المهني BTEC.
-                <br>ننصحك تفكر بشو أكثر شي بتحبه وشو أهدافك المستقبلية.
-                <br>لو بتحب التطبيق العملي أكثر، جرّب الاختبار الثاني لتعرف أي تخصص BTEC بناسبك!
-            </p>
-
-            <!-- Scores -->
-            <div class="grid grid-cols-2 gap-6 mb-8">
-                <div class="glass rounded-xl p-6">
-                    <div class="score-circle w-24 h-24 mx-auto mb-3">
-                        <svg width="96" height="96" viewBox="0 0 96 96">
-                            <circle class="circle-bg" cx="48" cy="48" r="40"/>
-                            <circle class="circle-fill" cx="48" cy="48" r="40" 
-                                stroke="url(#grad1)" 
-                                stroke-dasharray="${2 * Math.PI * 40}" 
-                                stroke-dashoffset="${2 * Math.PI * 40 * (1 - academicPercent/100)}"/>
-                            <defs><linearGradient id="grad1"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient></defs>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <span class="text-xl font-black">${academicPercent}%</span>
-                        </div>
-                    </div>
-                    <p class="font-bold text-cyan-400">أكاديمي</p>
-                </div>
-                <div class="glass rounded-xl p-6">
-                    <div class="score-circle w-24 h-24 mx-auto mb-3">
-                        <svg width="96" height="96" viewBox="0 0 96 96">
-                            <circle class="circle-bg" cx="48" cy="48" r="40"/>
-                            <circle class="circle-fill" cx="48" cy="48" r="40" 
-                                stroke="url(#grad2)" 
-                                stroke-dasharray="${2 * Math.PI * 40}" 
-                                stroke-dashoffset="${2 * Math.PI * 40 * (1 - btecPercent/100)}"/>
-                            <defs><linearGradient id="grad2"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <span class="text-xl font-black">${btecPercent}%</span>
-                        </div>
-                    </div>
-                    <p class="font-bold text-purple-400">مهني BTEC</p>
-                </div>
-            </div>
-
+            <p class="text-white/70 text-lg mb-8">عندك ميول متوازنة بين المسارين. جرّب الاختبار الثاني!</p>
+            ${circleHTML}
             <div class="flex flex-col gap-3">
-                <button onclick="startTest2()" class="btn-primary py-4 rounded-xl text-lg font-bold">
-                    ابدأ الاختبار الثاني - اكتشف تخصص BTEC 🔍
-                </button>
-                <button onclick="resetAll()" class="btn-secondary py-3 rounded-xl font-bold">
-                    إعادة الاختبار من البداية 🔄
-                </button>
+                <button onclick="startTest2()" class="btn-primary py-4 rounded-xl text-lg font-bold">ابدأ الاختبار الثاني 🔍</button>
+                <button onclick="saveAndReset()" class="btn-secondary py-3 rounded-xl font-bold">حفظ والخروج 💾</button>
             </div>
         `;
     } else if (isAcademic) {
         resultHTML = `
-            <div class="floating mb-6">
-                <div class="text-7xl">🎓</div>
-            </div>
+            <div class="floating mb-6"><div class="text-7xl">🎓</div></div>
             <h2 class="text-3xl font-black mb-2">${studentName}</h2>
-            <h3 class="text-2xl font-bold mb-6" style="color: #06b6d4;">المسار الأكاديمي هو الأنسب لك!</h3>
-            <p class="text-white/70 text-lg mb-8 leading-relaxed">
-                بناءً على إجاباتك، يبدو إنك بتميل أكثر للدراسة الأكاديمية التقليدية.
-                <br>عندك قدرات ممتازة بالتحليل والدراسة النظرية.
-                <br>ننصحك تكمل بالمسار الأكاديمي (العلمي أو الأدبي) وتقدم التوجيهي.
-            </p>
-
-            <div class="glass rounded-xl p-6 mb-6 text-right">
-                <h4 class="font-bold text-cyan-400 mb-3">✨ نقاط قوتك:</h4>
-                <ul class="space-y-2 text-white/70">
-                    <li>📚 قدرة عالية على الدراسة والحفظ</li>
-                    <li>🧠 تفكير تحليلي ومنطقي</li>
-                    <li>📝 تميز في الامتحانات الكتابية</li>
-                    <li>🎯 أهداف أكاديمية واضحة</li>
-                </ul>
-            </div>
-
-            <div class="glass rounded-xl p-6 mb-8 text-right">
-                <h4 class="font-bold text-cyan-400 mb-3">🎯 مسارات مقترحة:</h4>
-                <ul class="space-y-2 text-white/70">
-                    <li>🔬 الفرع العلمي → طب، هندسة، صيدلة</li>
-                    <li>📖 الفرع الأدبي → محاماة، إعلام، لغات</li>
-                    <li>💻 فرع تكنولوجيا المعلومات</li>
-                </ul>
-            </div>
-
-            <!-- Scores -->
-            <div class="grid grid-cols-2 gap-6 mb-8">
-                <div class="glass rounded-xl p-6">
-                    <div class="score-circle w-24 h-24 mx-auto mb-3">
-                        <svg width="96" height="96" viewBox="0 0 96 96">
-                            <circle class="circle-bg" cx="48" cy="48" r="40"/>
-                            <circle class="circle-fill" cx="48" cy="48" r="40" 
-                                stroke="url(#grad1)" 
-                                stroke-dasharray="${2 * Math.PI * 40}" 
-                                stroke-dashoffset="${2 * Math.PI * 40 * (1 - academicPercent/100)}"/>
-                            <defs><linearGradient id="grad1"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient></defs>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <span class="text-xl font-black">${academicPercent}%</span>
-                        </div>
-                    </div>
-                    <p class="font-bold text-cyan-400">أكاديمي</p>
-                </div>
-                <div class="glass rounded-xl p-6">
-                    <div class="score-circle w-24 h-24 mx-auto mb-3">
-                        <svg width="96" height="96" viewBox="0 0 96 96">
-                            <circle class="circle-bg" cx="48" cy="48" r="40"/>
-                            <circle class="circle-fill" cx="48" cy="48" r="40" 
-                                stroke="url(#grad2)" 
-                                stroke-dasharray="${2 * Math.PI * 40}" 
-                                stroke-dashoffset="${2 * Math.PI * 40 * (1 - btecPercent/100)}"/>
-                            <defs><linearGradient id="grad2"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <span class="text-xl font-black">${btecPercent}%</span>
-                        </div>
-                    </div>
-                    <p class="font-bold text-purple-400">مهني BTEC</p>
-                </div>
-            </div>
-
-            <p class="text-white/40 text-sm mb-6">💡 مع ذلك، لو حاب تعرف أي تخصص BTEC ممكن يناسبك، جرب الاختبار الثاني!</p>
-
+            <h3 class="text-2xl font-bold text-cyan-400 mb-6">المسار الأكاديمي هو الأنسب لك!</h3>
+            <p class="text-white/70 text-lg mb-8">بتميل للدراسة الأكاديمية. ننصحك تكمل بالمسار الأكاديمي وتقدم التوجيهي.</p>
+            ${circleHTML}
             <div class="flex flex-col gap-3">
-                <button onclick="startTest2()" class="btn-primary py-4 rounded-xl text-lg font-bold">
-                    الاختبار الثاني - اكتشف تخصص BTEC 🔍
-                </button>
-                <button onclick="resetAll()" class="btn-secondary py-3 rounded-xl font-bold">
-                    إعادة الاختبار من البداية 🔄
-                </button>
+                <button onclick="startTest2()" class="btn-primary py-4 rounded-xl text-lg font-bold">الاختبار الثاني - BTEC 🔍</button>
+                <button onclick="saveAndReset()" class="btn-secondary py-3 rounded-xl font-bold">حفظ والخروج 💾</button>
             </div>
         `;
     } else {
         resultHTML = `
-            <div class="floating mb-6">
-                <div class="text-7xl">🚀</div>
-            </div>
+            <div class="floating mb-6"><div class="text-7xl">🚀</div></div>
             <h2 class="text-3xl font-black mb-2">${studentName}</h2>
-            <h3 class="text-2xl font-bold gradient-text mb-6">مسار التعليم المهني BTEC هو الأنسب لك!</h3>
-            <p class="text-white/70 text-lg mb-8 leading-relaxed">
-                بناءً على إجاباتك، يبدو إنك بتميل أكثر للتعلم العملي والتطبيقي.
-                <br>مسار BTEC بناسبك لأنه بيركز على المشاريع والتدريب العملي.
-                <br>ابدأ الاختبار الثاني لتعرف أي تخصص BTEC بناسبك!
-            </p>
-
-            <div class="glass rounded-xl p-6 mb-6 text-right">
-                <h4 class="font-bold text-purple-400 mb-3">✨ نقاط قوتك:</h4>
-                <ul class="space-y-2 text-white/70">
-                    <li>🔧 مهارات عملية وتطبيقية عالية</li>
-                    <li>💡 إبداع في حل المشكلات</li>
-                    <li>👐 تعلم أفضل بالممارسة</li>
-                    <li>🎯 توجه مهني واضح</li>
-                </ul>
-            </div>
-
-            <div class="glass rounded-xl p-6 mb-8 text-right">
-                <h4 class="font-bold text-purple-400 mb-3">🌟 ميزات BTEC:</h4>
-                <ul class="space-y-2 text-white/70">
-                    <li>🌍 شهادة معترف فيها دولياً من بيرسون</li>
-                    <li>📊 تقييم بالمشاريع بدل الامتحانات التقليدية</li>
-                    <li>🛠️ 480 ساعة تدريب عملي بالسنة</li>
-                    <li>🎓 بتقدر تكمل جامعة أو تدخل سوق العمل</li>
-                </ul>
-            </div>
-
-            <!-- Scores -->
-            <div class="grid grid-cols-2 gap-6 mb-8">
-                <div class="glass rounded-xl p-6">
-                    <div class="score-circle w-24 h-24 mx-auto mb-3">
-                        <svg width="96" height="96" viewBox="0 0 96 96">
-                            <circle class="circle-bg" cx="48" cy="48" r="40"/>
-                            <circle class="circle-fill" cx="48" cy="48" r="40" 
-                                stroke="url(#grad1)" 
-                                stroke-dasharray="${2 * Math.PI * 40}" 
-                                stroke-dashoffset="${2 * Math.PI * 40 * (1 - academicPercent/100)}"/>
-                            <defs><linearGradient id="grad1"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient></defs>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <span class="text-xl font-black">${academicPercent}%</span>
-                        </div>
-                    </div>
-                    <p class="font-bold text-cyan-400">أكاديمي</p>
-                </div>
-                <div class="glass rounded-xl p-6">
-                    <div class="score-circle w-24 h-24 mx-auto mb-3">
-                        <svg width="96" height="96" viewBox="0 0 96 96">
-                            <circle class="circle-bg" cx="48" cy="48" r="40"/>
-                            <circle class="circle-fill" cx="48" cy="48" r="40" 
-                                stroke="url(#grad2)" 
-                                stroke-dasharray="${2 * Math.PI * 40}" 
-                                stroke-dashoffset="${2 * Math.PI * 40 * (1 - btecPercent/100)}"/>
-                            <defs><linearGradient id="grad2"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <span class="text-xl font-black">${btecPercent}%</span>
-                        </div>
-                    </div>
-                    <p class="font-bold text-purple-400">مهني BTEC</p>
-                </div>
-            </div>
-
+            <h3 class="text-2xl font-bold gradient-text mb-6">مسار BTEC هو الأنسب لك!</h3>
+            <p class="text-white/70 text-lg mb-8">بتميل للتعلم العملي. ابدأ الاختبار الثاني لتعرف أي تخصص بناسبك!</p>
+            ${circleHTML}
             <div class="flex flex-col gap-3">
-                <button onclick="startTest2()" class="btn-primary py-4 rounded-xl text-lg font-bold">
-                    ابدأ الاختبار الثاني - اكتشف تخصصك 🔍
-                </button>
-                <button onclick="resetAll()" class="btn-secondary py-3 rounded-xl font-bold">
-                    إعادة الاختبار من البداية 🔄
-                </button>
+                <button onclick="startTest2()" class="btn-primary py-4 rounded-xl text-lg font-bold">ابدأ الاختبار الثاني 🔍</button>
+                <button onclick="saveAndReset()" class="btn-secondary py-3 rounded-xl font-bold">حفظ والخروج 💾</button>
             </div>
         `;
     }
@@ -1254,7 +1442,7 @@ function renderQuestion2() {
         div.className = `option-card glass rounded-xl p-5 ${isSelected ? 'selected' : ''}`;
         div.innerHTML = `
             <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded-full ${isSelected ? 'bg-purple-500' : 'bg-white/10'} flex items-center justify-center flex-shrink-0 transition-all">
+                <div class="w-10 h-10 rounded-full ${isSelected ? 'bg-purple-500' : 'bg-white/10'} flex items-center justify-center flex-shrink-0">
                     <span class="text-sm font-bold">${isSelected ? '✓' : String.fromCharCode(1571 + i)}</span>
                 </div>
                 <p class="text-lg leading-relaxed">${opt.text}</p>
@@ -1265,18 +1453,9 @@ function renderQuestion2() {
     });
 
     document.getElementById('test2-prev-btn').classList.toggle('hidden', test2CurrentQ === 0);
-
     const nextBtn = document.getElementById('test2-next-btn');
     nextBtn.disabled = test2Answers[test2CurrentQ] === undefined;
-    if (test2CurrentQ === test2Questions.length - 1) {
-        nextBtn.textContent = 'عرض النتيجة 🎯';
-    } else {
-        nextBtn.textContent = 'السؤال التالي ←';
-    }
-
-    document.getElementById('test2-question-container').classList.remove('fade-in');
-    void document.getElementById('test2-question-container').offsetWidth;
-    document.getElementById('test2-question-container').classList.add('fade-in');
+    nextBtn.textContent = test2CurrentQ === test2Questions.length - 1 ? 'عرض النتيجة 🎯' : 'السؤال التالي ←';
 }
 
 function selectAnswer2(index) {
@@ -1302,156 +1481,72 @@ function prevQuestion2() {
     }
 }
 
-function showTest2Result() {
-    // Calculate scores
-    const scores = {
-        engineering: 0, it: 0, business: 0, hospitality: 0, beauty: 0,
-        agriculture: 0, art: 0, media: 0, construction: 0, tourism: 0
-    };
-
+async function showTest2Result() {
+    const scores = { engineering: 0, it: 0, business: 0, hospitality: 0, beauty: 0, agriculture: 0, art: 0, media: 0, construction: 0, tourism: 0 };
+    
     for (let i = 0; i < test2Questions.length; i++) {
-        const answerIndex = test2Answers[i];
-        if (answerIndex !== undefined) {
-            const optionScores = test2Questions[i].options[answerIndex].scores;
-            for (const [key, val] of Object.entries(optionScores)) {
-                scores[key] = (scores[key] || 0) + val;
+        const idx = test2Answers[i];
+        if (idx !== undefined) {
+            const optScores = test2Questions[i].options[idx].scores;
+            for (const [k, v] of Object.entries(optScores)) {
+                scores[k] = (scores[k] || 0) + v;
             }
         }
     }
 
-    // Sort specializations
     const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
     const maxScore = sorted[0][1];
     const top3 = sorted.slice(0, 3);
-    const allSpecs = sorted.filter(s => s[1] > 0);
 
-    // Build result HTML
+    if (window.currentResult) {
+        window.currentResult.test2 = {
+            scores,
+            topSpec: sorted[0][0],
+            top3: top3.map(([k, v]) => ({ key: k, score: v, percent: Math.round((v / maxScore) * 100) }))
+        };
+        await saveResultToFirebase(window.currentResult);
+    }
+
+    const topSpec = specDetails[top3[0][0]];
     let resultHTML = `
         <div class="result-card glass-strong rounded-3xl p-8 md:p-12 text-center mb-8">
-            <div class="floating mb-6">
-                <div class="text-7xl">${specDetails[top3[0][0]].icon}</div>
-            </div>
+            <div class="floating mb-6"><div class="text-7xl">${topSpec.icon}</div></div>
             <h2 class="text-3xl font-black mb-2">${studentName}</h2>
             <h3 class="text-2xl font-bold gradient-text mb-4">التخصص الأنسب لك</h3>
-            
             <div class="inline-block glass rounded-2xl px-8 py-4 mb-6">
-                <h4 class="text-3xl font-black bg-gradient-to-l ${specDetails[top3[0][0]].color} bg-clip-text" style="-webkit-text-fill-color: transparent;">
-                    ${specDetails[top3[0][0]].name}
-                </h4>
+                <h4 class="text-3xl font-black ${topSpec.textColor}">${topSpec.name}</h4>
             </div>
-
-            <p class="text-white/70 text-lg mb-8 leading-relaxed max-w-xl mx-auto">
-                ${specDetails[top3[0][0]].desc}
-            </p>
-
-            <div class="glass rounded-xl p-6 mb-6 text-right max-w-xl mx-auto">
-                <h4 class="${specDetails[top3[0][0]].textColor} font-bold mb-3">📝 ${specDetails[top3[0][0]].note}</h4>
-            </div>
+            <p class="text-white/70 text-lg mb-6 max-w-xl mx-auto">${topSpec.desc}</p>
         </div>
 
-        <!-- Top 3 Specializations -->
-        <h3 class="text-2xl font-bold text-center mb-6">🏆 أعلى 3 تخصصات مناسبة لك</h3>
+        <h3 class="text-2xl font-bold text-center mb-6">🏆 أعلى 3 تخصصات</h3>
         <div class="grid md:grid-cols-3 gap-4 mb-8">
-    `;
-
-    top3.forEach(([key, score], index) => {
-        const spec = specDetails[key];
-        const percent = Math.round((score / maxScore) * 100);
-        const medals = ['🥇', '🥈', '🥉'];
-        const delays = [0.2, 0.4, 0.6];
-        
-        resultHTML += `
-            <div class="spec-card glass-strong rounded-2xl p-6 text-center slide-up" style="animation-delay: ${delays[index]}s">
-                <div class="text-4xl mb-3">${medals[index]}</div>
-                <div class="text-3xl mb-2">${spec.icon}</div>
-                <h4 class="text-lg font-bold mb-2">${spec.name}</h4>
-                <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden mb-2">
-                    <div class="h-full rounded-full bg-gradient-to-l ${spec.color}" style="width: ${percent}%"></div>
-                </div>
-                <p class="text-white/50 text-sm">${percent}% توافق</p>
-            </div>
-        `;
-    });
-
-    resultHTML += `</div>`;
-
-    // Detailed Top 1 Card
-    const topSpec = specDetails[top3[0][0]];
-    resultHTML += `
-        <div class="glass-strong rounded-2xl p-8 mb-8 slide-up" style="animation-delay: 0.8s">
-            <h3 class="text-xl font-bold mb-6 text-center">📋 تفاصيل تخصص ${topSpec.name}</h3>
-            
-            <div class="grid md:grid-cols-2 gap-6">
-                <div class="glass rounded-xl p-5 text-right">
-                    <h4 class="${topSpec.textColor} font-bold mb-3">🎯 المهارات اللي رح تتعلمها:</h4>
-                    <ul class="space-y-2 text-white/70">
-                        ${topSpec.skills.map(s => `<li class="flex items-center gap-2"><span class="text-green-400">✓</span> ${s}</li>`).join('')}
-                    </ul>
-                </div>
-                <div class="glass rounded-xl p-5 text-right">
-                    <h4 class="${topSpec.textColor} font-bold mb-3">💼 فرص العمل المستقبلية:</h4>
-                    <ul class="space-y-2 text-white/70">
-                        ${topSpec.careers.map(c => `<li class="flex items-center gap-2"><span class="text-blue-400">◆</span> ${c}</li>`).join('')}
-                    </ul>
-                </div>
-            </div>
-        </div>
-    `;
-
-    // All scores bar chart
-    resultHTML += `
-        <div class="glass-strong rounded-2xl p-8 mb-8 slide-up" style="animation-delay: 1s">
-            <h3 class="text-xl font-bold mb-6 text-center">📊 نتائجك في جميع التخصصات</h3>
-            <div class="space-y-4">
-    `;
-
-    allSpecs.forEach(([key, score]) => {
-        const spec = specDetails[key];
-        const percent = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-        resultHTML += `
-            <div class="flex items-center gap-4">
-                <div class="w-8 text-xl flex-shrink-0 text-center">${spec.icon}</div>
-                <div class="w-28 text-sm font-bold flex-shrink-0 text-right">${spec.name}</div>
-                <div class="flex-1 h-4 bg-white/10 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full bg-gradient-to-l ${spec.color} transition-all duration-1000" style="width: ${percent}%"></div>
-                </div>
-                <div class="w-12 text-sm font-bold text-left text-white/60">${percent}%</div>
-            </div>
-        `;
-    });
-
-    resultHTML += `
-            </div>
-        </div>
-    `;
-
-    // Info Box
-    resultHTML += `
-        <div class="glass rounded-2xl p-6 mb-8 text-right slide-up" style="animation-delay: 1.2s">
-            <h4 class="text-lg font-bold mb-3 text-amber-400">⚠️ ملاحظة مهمة</h4>
-            <p class="text-white/60 leading-relaxed text-sm">
-                هذا الاختبار استرشادي وهدفه يساعدك تتعرف على ميولك واهتماماتك. 
-                القرار النهائي يعتمد عليك وعلى أهلك ومرشدك التربوي بالمدرسة.
-                <br>تخصصات BTEC المتوفرة حالياً بالأردن: الهندسة، تكنولوجيا المعلومات، إدارة الأعمال، الفندقة والضيافة، الشعر والتجميل، الزراعة، الفن والتصميم، الوسائط الإبداعية، البناء والإنشاءات، السياحة والسفر.
-                <br>الدراسة من الصف العاشر حتى الثاني عشر (3 سنوات) وبتحصل على شهادة بيرسون الدولية.
-            </p>
-        </div>
-    `;
-
-    // Action Buttons
-    resultHTML += `
-        <div class="flex flex-col sm:flex-row gap-4 slide-up" style="animation-delay: 1.4s">
-            <button onclick="printResult()" class="btn-primary flex-1 py-4 rounded-xl text-lg font-bold">
-                طباعة النتيجة 🖨️
-            </button>
-            <button onclick="resetAll()" class="btn-secondary flex-1 py-4 rounded-xl text-lg font-bold">
-                إعادة من البداية 🔄
-            </button>
+            ${top3.map(([key, score], i) => {
+                const spec = specDetails[key];
+                const percent = Math.round((score / maxScore) * 100);
+                const medals = ['🥇', '🥈', '🥉'];
+                return `
+                    <div class="spec-card glass-strong rounded-2xl p-6 text-center">
+                        <div class="text-4xl mb-3">${medals[i]}</div>
+                        <div class="text-3xl mb-2">${spec.icon}</div>
+                        <h4 class="text-lg font-bold mb-2">${spec.name}</h4>
+                        <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden mb-2">
+                            <div class="h-full rounded-full bg-gradient-to-l ${spec.color}" style="width: ${percent}%"></div>
+                        </div>
+                        <p class="text-white/50 text-sm">${percent}% توافق</p>
+                    </div>
+                `;
+            }).join('')}
         </div>
 
-        <div class="text-center mt-8 text-white/30 text-sm">
-            <p>🇯🇴 مصمم لطلاب الصف التاسع في المملكة الأردنية الهاشمية</p>
-            <p class="mt-1">نظام BTEC بالتعاون مع بيرسون الدولية ووزارة التربية والتعليم</p>
+        <div class="glass rounded-2xl p-6 mb-8 text-right">
+            <h4 class="text-lg font-bold mb-3 text-green-400">✅ تم حفظ نتيجتك!</h4>
+            <p class="text-white/60 text-sm">يمكن للمعلم مراجعة نتيجتك من لوحة التحليل.</p>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-4">
+            <button onclick="showDashboard()" class="btn-success flex-1 py-4 rounded-xl text-lg font-bold">لوحة التحليل 📊</button>
+            <button onclick="resetAll()" class="btn-secondary flex-1 py-4 rounded-xl text-lg font-bold">اختبار جديد 🔄</button>
         </div>
     `;
 
@@ -1459,8 +1554,257 @@ function showTest2Result() {
     showPage('test2-result');
 }
 
-function printResult() {
-    window.print();
+
+// ==================== DASHBOARD ====================
+
+function showDashboard() {
+    showPage('dashboard-page');
+    renderDashboard();
+}
+
+function renderDashboard() {
+    const results = allResults;
+    
+    const total = results.length;
+    const academic = results.filter(r => r.test1?.result === 'academic').length;
+    const btec = results.filter(r => r.test1?.result === 'btec').length;
+    const mixed = results.filter(r => r.test1?.result === 'mixed').length;
+
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-academic').textContent = academic;
+    document.getElementById('stat-btec').textContent = btec;
+    document.getElementById('stat-mixed').textContent = mixed;
+
+    renderCharts(results);
+    renderTable(results);
+    renderSpecAnalysis(results);
+}
+
+let pathChart, specChart, genderChart, genderPathChart;
+
+function renderCharts(results) {
+    const academic = results.filter(r => r.test1?.result === 'academic').length;
+    const btec = results.filter(r => r.test1?.result === 'btec').length;
+    const mixed = results.filter(r => r.test1?.result === 'mixed').length;
+
+    if (pathChart) pathChart.destroy();
+    if (specChart) specChart.destroy();
+    if (genderChart) genderChart.destroy();
+    if (genderPathChart) genderPathChart.destroy();
+
+    const pathCtx = document.getElementById('pathChart').getContext('2d');
+    pathChart = new Chart(pathCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['أكاديمي', 'مهني BTEC', 'متوازن'],
+            datasets: [{ data: [academic, btec, mixed], backgroundColor: ['#06b6d4', '#a855f7', '#f59e0b'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#fff', font: { family: 'Cairo' } } } } }
+    });
+
+    const specCounts = {};
+    results.forEach(r => { if (r.test2?.topSpec) specCounts[r.test2.topSpec] = (specCounts[r.test2.topSpec] || 0) + 1; });
+    const sortedSpecs = Object.entries(specCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    const specCtx = document.getElementById('specChart').getContext('2d');
+    specChart = new Chart(specCtx, {
+        type: 'bar',
+        data: {
+            labels: sortedSpecs.map(([k]) => specDetails[k]?.name || k),
+            datasets: [{ label: 'عدد الطلاب', data: sortedSpecs.map(([, v]) => v), backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#10b981', '#f59e0b'], borderRadius: 8 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#fff' }, grid: { color: 'rgba(255,255,255,0.1)' } }, y: { ticks: { color: '#fff', font: { family: 'Cairo' } }, grid: { display: false } } } }
+    });
+
+    const male = results.filter(r => r.gender === 'male').length;
+    const female = results.filter(r => r.gender === 'female').length;
+    const notSpec = results.filter(r => !r.gender).length;
+
+    const genderCtx = document.getElementById('genderChart').getContext('2d');
+    genderChart = new Chart(genderCtx, {
+        type: 'pie',
+        data: { labels: ['ذكور', 'إناث', 'غير محدد'], datasets: [{ data: [male, female, notSpec], backgroundColor: ['#3b82f6', '#ec4899', '#6b7280'], borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#fff', font: { family: 'Cairo' } } } } }
+    });
+
+    const maleAcad = results.filter(r => r.gender === 'male' && r.test1?.result === 'academic').length;
+    const maleBtec = results.filter(r => r.gender === 'male' && r.test1?.result === 'btec').length;
+    const femaleAcad = results.filter(r => r.gender === 'female' && r.test1?.result === 'academic').length;
+    const femaleBtec = results.filter(r => r.gender === 'female' && r.test1?.result === 'btec').length;
+
+    const genderPathCtx = document.getElementById('genderPathChart').getContext('2d');
+    genderPathChart = new Chart(genderPathCtx, {
+        type: 'bar',
+        data: {
+            labels: ['ذكور', 'إناث'],
+            datasets: [
+                { label: 'أكاديمي', data: [maleAcad, femaleAcad], backgroundColor: '#06b6d4', borderRadius: 4 },
+                { label: 'مهني BTEC', data: [maleBtec, femaleBtec], backgroundColor: '#a855f7', borderRadius: 4 }
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { color: '#fff', font: { family: 'Cairo' } } } }, scales: { x: { ticks: { color: '#fff' }, grid: { display: false } }, y: { ticks: { color: '#fff' }, grid: { color: 'rgba(255,255,255,0.1)' } } } }
+    });
+}
+
+function renderTable(results) {
+    const tbody = document.getElementById('results-tbody');
+    const emptyState = document.getElementById('empty-state');
+
+    let filtered = results;
+    if (currentTab === 'academic') filtered = results.filter(r => r.test1?.result === 'academic');
+    else if (currentTab === 'btec') filtered = results.filter(r => r.test1?.result === 'btec' || r.test1?.result === 'mixed');
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+    }
+
+    emptyState.classList.add('hidden');
+    tbody.innerHTML = filtered.map((r, i) => {
+        const pathLabel = r.test1?.result === 'academic' ? 'أكاديمي' : (r.test1?.result === 'btec' ? 'BTEC' : 'متوازن');
+        const pathColor = r.test1?.result === 'academic' ? 'text-cyan-400' : (r.test1?.result === 'btec' ? 'text-purple-400' : 'text-amber-400');
+        const specName = r.test2?.topSpec ? specDetails[r.test2.topSpec]?.name : '-';
+        const specIcon = r.test2?.topSpec ? specDetails[r.test2.topSpec]?.icon : '';
+        const genderLabel = r.gender === 'male' ? 'ذكر' : (r.gender === 'female' ? 'أنثى' : '-');
+        const date = r.timestamp ? new Date(r.timestamp).toLocaleDateString('ar-JO') : '-';
+
+        return `
+            <tr>
+                <td class="text-white/50">${i + 1}</td>
+                <td class="font-bold">${r.name}</td>
+                <td class="text-white/70">${r.school || '-'}</td>
+                <td class="text-white/70">${genderLabel}</td>
+                <td class="${pathColor} font-bold">${pathLabel}</td>
+                <td><span class="text-cyan-400">${r.test1?.academicPercent || 0}%</span> / <span class="text-purple-400">${r.test1?.btecPercent || 0}%</span></td>
+                <td>${specIcon} ${specName}</td>
+                <td class="text-white/50 text-sm">${date}</td>
+                <td>
+                    <button onclick="viewDetails('${r.id}')" class="text-blue-400 hover:text-blue-300 ml-2">👁️</button>
+                    <button onclick="deleteResult('${r.id}')" class="text-red-400 hover:text-red-300">🗑️</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderSpecAnalysis(results) {
+    const specCounts = {};
+    Object.keys(specDetails).forEach(k => specCounts[k] = 0);
+    results.forEach(r => { if (r.test2?.topSpec) specCounts[r.test2.topSpec]++; });
+
+    document.getElementById('spec-analysis').innerHTML = Object.entries(specCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, count]) => {
+            const spec = specDetails[key];
+            const total = results.filter(r => r.test2).length;
+            const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+            return `
+                <div class="glass rounded-xl p-4 text-center">
+                    <div class="text-3xl mb-2">${spec.icon}</div>
+                    <h4 class="font-bold text-sm mb-1">${spec.name}</h4>
+                    <div class="text-2xl font-black ${spec.textColor}">${count}</div>
+                    <div class="text-white/40 text-xs">${percent}%</div>
+                </div>
+            `;
+        }).join('');
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    renderTable(allResults);
+}
+
+function viewDetails(id) {
+    const r = allResults.find(res => res.id === id);
+    if (!r) return;
+
+    const pathLabel = r.test1?.result === 'academic' ? 'أكاديمي' : (r.test1?.result === 'btec' ? 'BTEC' : 'متوازن');
+    const genderLabel = r.gender === 'male' ? 'ذكر' : (r.gender === 'female' ? 'أنثى' : 'غير محدد');
+    const topSpec = r.test2?.topSpec ? specDetails[r.test2.topSpec] : null;
+
+    let html = `
+        <h2 class="text-2xl font-black mb-6 text-center gradient-text">تفاصيل النتيجة</h2>
+        <div class="glass rounded-xl p-6 mb-6">
+            <div class="grid grid-cols-2 gap-4 text-right">
+                <div><span class="text-white/50 text-sm">الاسم:</span><p class="font-bold text-lg">${r.name}</p></div>
+                <div><span class="text-white/50 text-sm">المدرسة:</span><p class="font-bold">${r.school || '-'}</p></div>
+                <div><span class="text-white/50 text-sm">الجنس:</span><p class="font-bold">${genderLabel}</p></div>
+                <div><span class="text-white/50 text-sm">المسار:</span><p class="font-bold">${pathLabel}</p></div>
+            </div>
+        </div>
+        <div class="glass rounded-xl p-6 mb-6 text-center">
+            <div class="flex justify-center gap-8">
+                <div><div class="text-3xl font-black text-cyan-400">${r.test1?.academicPercent || 0}%</div><div class="text-white/50 text-sm">أكاديمي</div></div>
+                <div><div class="text-3xl font-black text-purple-400">${r.test1?.btecPercent || 0}%</div><div class="text-white/50 text-sm">مهني</div></div>
+            </div>
+        </div>
+    `;
+
+    if (topSpec) {
+        html += `
+            <div class="glass rounded-xl p-6 text-center">
+                <span class="text-5xl">${topSpec.icon}</span>
+                <h4 class="text-xl font-bold mt-2 ${topSpec.textColor}">${topSpec.name}</h4>
+            </div>
+        `;
+    }
+
+    document.getElementById('details-content').innerHTML = html;
+    document.getElementById('details-modal').classList.remove('hidden');
+}
+
+function closeDetailsModal() {
+    document.getElementById('details-modal').classList.add('hidden');
+}
+
+function confirmClearData() {
+    document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('confirm-modal').classList.add('hidden');
+}
+
+async function clearAllData() {
+    await clearAllFromFirebase();
+    closeModal();
+}
+
+async function deleteResult(id) {
+    if (confirm('هل أنت متأكد من حذف هذه النتيجة؟')) {
+        await deleteResultFromFirebase(id);
+    }
+}
+
+function exportData() {
+    if (allResults.length === 0) { alert('لا توجد بيانات'); return; }
+    
+    let csv = '\uFEFF';
+    csv += 'الاسم,المدرسة,الجنس,أكاديمي%,مهني%,المسار,تخصص BTEC,التاريخ\n';
+    
+    allResults.forEach(r => {
+        const gender = r.gender === 'male' ? 'ذكر' : (r.gender === 'female' ? 'أنثى' : '-');
+        const path = r.test1?.result === 'academic' ? 'أكاديمي' : (r.test1?.result === 'btec' ? 'مهني' : 'متوازن');
+        const spec = r.test2?.topSpec ? specDetails[r.test2.topSpec]?.name : '-';
+        const date = r.timestamp ? new Date(r.timestamp).toLocaleDateString('ar-JO') : '-';
+        csv += `"${r.name}","${r.school || '-'}","${gender}","${r.test1?.academicPercent || 0}%","${r.test1?.btecPercent || 0}%","${path}","${spec}","${date}"\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `نتائج_الاختبار_${new Date().toLocaleDateString('ar-JO')}.csv`;
+    link.click();
+}
+
+async function saveAndReset() {
+    if (window.currentResult && !window.currentResult.test2) {
+        await saveResultToFirebase(window.currentResult);
+    }
+    resetAll();
 }
 
 function resetAll() {
@@ -1468,16 +1812,17 @@ function resetAll() {
     test1Answers = {};
     test2CurrentQ = 0;
     test2Answers = {};
+    window.currentResult = null;
+    document.getElementById('student-name').value = '';
+    document.getElementById('student-school').value = '';
+    document.getElementById('student-gender').value = '';
     showPage('landing-page');
 }
 
 // Initialize
 createParticles();
-
-// Enter key support
-document.getElementById('student-name').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') startTest1();
-});
+initFirebase();
+document.getElementById('student-name').addEventListener('keypress', (e) => { if (e.key === 'Enter') startTest1(); });
 </script>
 
 </body>
